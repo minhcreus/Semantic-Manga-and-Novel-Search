@@ -5,8 +5,16 @@ import faiss
 import os
 import re
 from sentence_transformers import SentenceTransformer
+from transformers import AutoModel, AutoTokenizer
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
+model_name = 'sentence-transformers/all-MiniLM-L6-v2'
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+transformer_model = AutoModel.from_pretrained(model_name)
+
+from sentence_transformers.models import Transformer, Pooling
+word_embedding_model = Transformer(model_name)
+pooling_model = Pooling(word_embedding_model.get_word_embedding_dimension())
+model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
 
 df = pd.read_csv("meta_manga_novel.csv")
 embeddings = np.load("novel_embeddings.npy")
