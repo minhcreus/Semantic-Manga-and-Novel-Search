@@ -10,8 +10,8 @@ from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 
 load_dotenv()
-torch.set_default_tensor_type(torch.FloatTensor)
-model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', device = 'cpu')
+
+model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
 df = pd.read_csv(os.getenv("CSV_PATH", "meta_manga_novel.csv"))
 embeddings = np.load("novel_embeddings.npy")
