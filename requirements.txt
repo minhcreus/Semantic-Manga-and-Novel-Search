@@ -1,6 +1,7 @@
-streamlit
+torch==1.13.1
+sentence-transformers==2.2.2
+faiss-cpu
 pandas
 numpy
-faiss-cpu
-sentence-transformers
+streamlit
 python-dotenv
