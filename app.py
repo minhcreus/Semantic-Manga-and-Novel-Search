@@ -2,72 +2,78 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import faiss
-import os
+import torch
 import re
-from sentence_transformers import SentenceTransformer
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoTokenizer, AutoModel
 
-model_name = 'sentence-transformers/all-MiniLM-L6-v2'
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-transformer_model = AutoModel.from_pretrained(model_name)
+@st.cache_resource
+def load_model():
+    model_name = 'sentence-transformers/all-MiniLM-L6-v2'
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModel.from_pretrained(model_name)
+    model.eval()
+    return tokenizer, model
 
-from sentence_transformers.models import Transformer, Pooling
-word_embedding_model = Transformer(model_name)
-pooling_model = Pooling(word_embedding_model.get_word_embedding_dimension())
-model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
+def get_embeddings(texts, tokenizer, model):
+    inputs = tokenizer(texts, padding=True, truncation=True, return_tensors='pt')
+    with torch.no_grad():
+        outputs = model(**inputs)
+        embeddings = mean_pooling(outputs, inputs['attention_mask'])
+    return embeddings.detach().numpy().astype("float32")
 
-df = pd.read_csv("meta_manga_novel.csv")
-embeddings = np.load("novel_embeddings.npy")
-index = faiss.read_index("novel_index.faiss")
-
-genres = ['All'] + sorted(df['genre'].dropna().unique()) if "genre" in df.columns else ['All']
-has_genre = "genre" in df.columns
+def mean_pooling(model_output, attention_mask):
+    token_embeddings = model_output[0]
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    return (token_embeddings * input_mask_expanded).sum(1) / input_mask_expanded.sum(1)
 
 def highlight(text, query):
     pattern = re.compile(r'(' + '|'.join(map(re.escape, query.split())) + r')', re.IGNORECASE)
-    return pattern.sub(r'**\\1**', text)
+    return pattern.sub(r'**\1**', text)
 
-def semantic_search(query, genre_filter="All", top_k=5):
-    mask = df['fulltext'].notna()
-    if genre_filter != "All" and has_genre:
-        mask &= df['genre'].fillna("").str.contains(genre_filter, case=False)
+def semantic_search(query, df, tokenizer, model, genre="All", top_k=5):
+    if genre != "All" and "genre" in df.columns:
+        mask = df["genre"].fillna("").str.contains(genre, case=False)
+        sub_df = df[mask]
+    else:
+        sub_df = df.copy()
 
-    sub_df = df[mask].reset_index(drop=True)
+    sub_df = sub_df[sub_df["fulltext"].notna()].reset_index(drop=True)
     if sub_df.empty:
         return []
 
-    sub_embeddings = model.encode(sub_df["fulltext"].tolist(), show_progress_bar=False)
-    sub_embeddings = np.array(sub_embeddings).astype("float32")
+    texts = sub_df["fulltext"].tolist()
+    embeddings = get_embeddings(texts, tokenizer, model)
+    index = faiss.IndexFlatL2(embeddings.shape[1])
+    index.add(embeddings)
 
-    temp_index = faiss.IndexFlatL2(sub_embeddings.shape[1])
-    temp_index.add(sub_embeddings)
-
-    query_vec = model.encode([query]).astype("float32")
-    distances, indices = temp_index.search(query_vec, top_k)
+    query_embedding = get_embeddings([query], tokenizer, model)
+    distances, indices = index.search(query_embedding, top_k)
 
     results = sub_df.iloc[indices[0]].copy()
     results["score"] = distances[0]
     return results
 
-st.title("📚 Semantic Manga/Novel Search")
-st.markdown("Enter a natural language query to search the library of novels/manga using AI.")
+# Load resources
+tokenizer, model = load_model()
+df = pd.read_csv("meta_manga_novel.csv")
 
-query = st.text_input("Search Query")
-genre = st.selectbox("Filter by Genre", genres) if has_genre else "All"
-top_k = st.slider("Top K Results", min_value=1, max_value=10, value=5)
+# UI
+st.title("📚 AI-Powered Novel Search (CPU Safe, Py3.13)")
+query = st.text_input("🔍 Search your favorite topic:")
+genres = ['All'] + sorted(df['genre'].dropna().unique()) if "genre" in df.columns else ['All']
+selected_genre = st.selectbox("🎭 Genre filter", genres)
+top_k = st.slider("Number of results", 1, 10, 5)
 
-if st.button("Search") and query.strip():
+if query:
     with st.spinner("Searching..."):
-        results = semantic_search(query, genre_filter=genre, top_k=top_k)
+        results = semantic_search(query, df, tokenizer, model, genre=selected_genre, top_k=top_k)
         if results.empty:
             st.warning("No results found.")
         else:
             for _, row in results.iterrows():
                 st.markdown(f"### {row['title']}")
                 st.markdown(f"*{row['summary']}*")
-                snippet = row['fulltext'][:300].replace("\\n", " ") if pd.notna(row['fulltext']) else ""
+                snippet = row['fulltext'][:300].replace("\n", " ") if pd.notna(row['fulltext']) else ""
                 st.markdown(highlight(snippet, query) + "...")
                 st.markdown(f"[🔗 Link]({row['link']})")
                 st.caption(f"Score: {row['score']:.4f}")
-else:
-    st.info("Enter a query and click Search.")
