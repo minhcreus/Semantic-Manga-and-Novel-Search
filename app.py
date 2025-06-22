@@ -7,17 +7,19 @@ import re
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 
-# Load environment and model
 load_dotenv()
 model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
-# Load data
 df = pd.read_csv(os.getenv("CSV_PATH", "meta_manga_novel.csv"))
 embeddings = np.load("novel_embeddings.npy")
 index = faiss.read_index("novel_index.faiss")
 
-# Genre filter setup
-genres = ['All'] + sorted(df['genre'].dropna().unique().tolist())
+if "genre" in df.columns:
+    genres = ['All'] + sorted(df['genre'].dropna().unique().tolist())
+    has_genre = True
+else:
+    genres = ['All']
+    has_genre = False
 
 def highlight(text, query):
     pattern = re.compile(r'(' + '|'.join(map(re.escape, query.split())) + r')', re.IGNORECASE)
@@ -45,12 +47,16 @@ def semantic_search(query, genre_filter="All", top_k=5):
     results["score"] = distances[0]
     return results
 
-# Streamlit UI
-st.title("📚 Semantic Manga/Novel Search")
-st.markdown("Enter a natural language query to search across a library of stories using AI.")
+st.title("Semantic Manga/Novel Search")
+st.markdown("Enter a natural language query to search across a library of novels.")
 
 query = st.text_input("Search Query")
-genre = st.selectbox("Genre Filter", genres)
+
+if has_genre:
+    genre = st.selectbox("Genre Filter", genres)
+else:
+    genre = "All"
+
 top_k = st.slider("Top K Results", min_value=1, max_value=10, value=5)
 
 if st.button("Search") and query.strip():
@@ -65,7 +71,7 @@ if st.button("Search") and query.strip():
                 st.markdown(f"*{row['summary']}*")
                 snippet = row['fulltext'][:300].replace("\n", " ") if pd.notna(row['fulltext']) else ""
                 st.markdown(highlight(snippet, query) + "...")
-                st.markdown(f"[🔗 Link]({row['link']})")
+                st.markdown(f"[Link]({row['link']})")
                 st.caption(f"Score: {row['score']:.4f}")
 else:
     st.info("Enter a query and click Search to begin.")
