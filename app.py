@@ -4,11 +4,12 @@ import numpy as np
 import faiss
 import os
 import re
+import torch
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 
 load_dotenv()
-model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', device = 'cpu')
 
 df = pd.read_csv(os.getenv("CSV_PATH", "meta_manga_novel.csv"))
 embeddings = np.load("novel_embeddings.npy")
