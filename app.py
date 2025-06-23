@@ -6,7 +6,7 @@ import re
 from sentence_transformers import SentenceTransformer
 
 df = pd.read_csv("wuxia_novel_details_dupli_dropped.csv")
-embeddings = np.load("wuxia_embeddings.npy") 
+embeddings = np.load("novel_embeddings.npy") 
 
 has_genre = "Genre" in df.columns
 genres = ['All'] + sorted(set(g.strip() for g_list in df['Genre'].dropna() for g in g_list.split(','))) if has_genre else ['All']
