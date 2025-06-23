@@ -1,7 +1,8 @@
-streamlit
-torch>=2.5.0
-sentence-transformers>=2.6.1
-faiss-cpu
-pandas
-numpy
-python-dotenv
+streamlit>=1.33
+pandas>=2.2
+numpy>=1.25
+faiss-cpu>=1.7.4
+sentence-transformers>=2.6
+torch>=2.5
+scikit-learn>=1.3
+transformers>=4.41
