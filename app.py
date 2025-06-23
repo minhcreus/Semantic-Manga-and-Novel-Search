@@ -11,7 +11,7 @@ st.title("Semantic Search for Wuxia Novels")
 
 # Load data and embeddings
 df = pd.read_csv("wuxia_novel_details_dupli_dropped.csv")
-embeddings = np.load("novel_embeddings.npy")
+embeddings = np.load("ưuxia_embeddings.npy")
 
 # Load Sentence Transformer model
 model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
