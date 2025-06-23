@@ -64,7 +64,7 @@ if query:
         st.markdown(
             f"""
             <div style='background-color:#f8f9fa;padding:10px;border-radius:8px;margin-bottom:10px;'>
-                <h4>{i+1}. {row['title']}</h4>
+                <h4>{i+1}. {row.get('title', 'Untitled')}</h4>
                 <b>Author:</b> {row.get('author', 'Unknown')} | 
                 <b>Genres:</b> {row.get('genre', 'Unknown')} | 
                 <b>Language:</b> {row.get('language', 'Unknown')} | 
