@@ -18,9 +18,9 @@ model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
 # Optional filter fields
 genres = sorted(df['genre'].dropna().unique()) if 'genre' in df.columns else []
-authors = ['All'] + sorted(df['author'].dropna().unique()) if 'author' in df.columns else []
-languages = ['All'] + sorted(df['language'].dropna().unique()) if 'language' in df.columns else []
-tags = ['All'] + sorted(df['tag'].dropna().unique()) if 'tag' in df.columns else []
+authors = ['All'] + sorted(df['author'].dropna().unique()) if 'author' in df.columns else ['All']
+languages = ['All'] + sorted(df['language'].dropna().unique()) if 'language' in df.columns else ['All']
+tags = ['All'] + sorted(df['tag'].dropna().unique()) if 'tag' in df.columns else ['All']
 
 # Sidebar filters
 with st.sidebar:
