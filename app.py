@@ -55,5 +55,6 @@ if query:
         st.markdown(f"### {row['Title']}")
         if pd.notna(row.get("Link")):
             st.markdown(f"[Read here]({row['Link']})")
+        st.markdown(f"**Score:** {row['score']:.2f}")
         st.markdown(highlight(row["Summary"], query), unsafe_allow_html=True)
         st.markdown("---")
