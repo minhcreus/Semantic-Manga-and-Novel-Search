@@ -42,7 +42,7 @@ def semantic_search(query, df, index, embeddings, model, selected_genres, select
         mask &= df['language'] == selected_language
 
     sub_df = df[mask].copy()
-    sub_df = sub_df[sub_df["Summary"].notna()].reset_index(drop=True)
+    sub_df = sub_df[sub_df["summary"].notna()].reset_index(drop=True)
     sub_embeddings = embeddings[mask.values][:len(sub_df)]
 
     if sub_df.empty:
@@ -67,9 +67,6 @@ with st.sidebar:
     selected_author = st.selectbox("Author", authors)
     selected_language = st.selectbox("Language", languages)
 
-# ----------------------
-# Display Results
-# ----------------------
 if query:
     results = semantic_search(
         query,
