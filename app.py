@@ -75,7 +75,7 @@ def semantic_search(query, df, embeddings, model, selected_genres=None, top_k=5)
     results["score"] = similarities[top_indices]
     return results
 
-st.title("Wuxia Novel Semantic Search")
+st.title("Novel Semantic Search")
 query = st.text_input("Enter a query (e.g., apocalypse, reincarnation, cultivation):")
 
 selected_genres = st.multiselect("Filter by Genre", options=['All'] + unique_genres, default=['All'])
