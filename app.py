@@ -5,10 +5,10 @@ import faiss
 import re
 import nltk
 from sentence_transformers import SentenceTransformer
-import nltk
 from nltk.stem import WordNetLemmatizer
 from nltk import data as nltk_data
 
+# Safe downloading of punkt and wordnet
 try:
     nltk_data.find('tokenizers/punkt')
 except LookupError:
@@ -18,10 +18,6 @@ try:
     nltk_data.find('corpora/wordnet')
 except LookupError:
     nltk.download('wordnet')
-
-
-nltk.download('punkt')
-nltk.download('wordnet')
 
 # Load data
 df = pd.read_csv("meta_manga_novel_with_genre.csv")
