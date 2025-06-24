@@ -9,15 +9,12 @@ from nltk.stem import WordNetLemmatizer
 from nltk import data as nltk_data
 
 # Safe downloading of punkt and wordnet
-try:
-    nltk_data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
+@st.cache_resource
+def setup_nltk():
+    nltk.download('punkt', quiet=True)
+    nltk.download('wordnet', quiet=True)
 
-try:
-    nltk_data.find('corpora/wordnet')
-except LookupError:
-    nltk.download('wordnet')
+setup_nltk()
 
 # Load data
 df = pd.read_csv("meta_manga_novel_with_genre.csv")
@@ -40,14 +37,9 @@ model = SentenceTransformer("all-MiniLM-L6-v2")
 lemmatizer = WordNetLemmatizer()
 
 def normalize_query(query):
-    try:
-        # Use a simpler tokenizer that doesn't rely on 'punkt_tab'
-        tokens = re.findall(r'\b\w+\b', query.lower())
-    except Exception:
-        tokens = query.lower().split()
-    lemmatized = [lemmatizer.lemmatize(t) for t in tokens]
+    tokens = nltk.word_tokenize(query.lower())
+    lemmatized = [lemmatizer.lemmatize(t) for t in tokens if re.match(r'\w+', t)]
     return ' '.join(lemmatized)
-
 
 def highlight(text, query):
     pattern = re.compile(r'(' + '|'.join(map(re.escape, query.split())) + r')', re.IGNORECASE)
