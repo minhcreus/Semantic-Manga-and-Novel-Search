@@ -14,9 +14,13 @@ if len(df) != len(embeddings):
     df = df.iloc[:len(embeddings)].copy()
     embeddings = embeddings[:len(df)]
 
+# Standardize column names
+if 'Genre' not in df.columns:
+    df.columns = [col.strip().capitalize() for col in df.columns]
+
 # Genre menu setup
 has_genre = "Genre" in df.columns
-unique_genres = sorted(set(g.strip() for g_list in df['Genre'].dropna() for g in g_list.split(','))) if has_genre else []
+unique_genres = sorted(set(g.strip() for g_list in df['Genre'].dropna() for g in str(g_list).split(','))) if has_genre else []
 
 # Load model
 model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -38,7 +42,7 @@ def semantic_search(query, df, embeddings, model, selected_genres=None, top_k=5)
         sub_df = df.copy()
         sub_embeddings = embeddings[:len(sub_df)]
 
-    sub_df = sub_df[sub_df["summary"].notna()].reset_index(drop=True)
+    sub_df = sub_df[sub_df["Summary"].notna()].reset_index(drop=True)
     sub_embeddings = sub_embeddings[:len(sub_df)]
 
     if sub_df.empty:
@@ -62,10 +66,10 @@ top_k = st.slider("Number of results", min_value=1, max_value=20, value=5)
 if query:
     results = semantic_search(query, df, embeddings, model, selected_genres=selected_genres, top_k=top_k)
     for i, row in results.iterrows():
-        st.markdown(f"### {row['title']}")
-        if pd.notna(row.get("link")):
-            st.markdown(f"[Read here]({row['link']})")
+        st.markdown(f"### {row['Title']}")
+        if pd.notna(row.get("Link")):
+            st.markdown(f"[Read here]({row['Link']})")
         st.markdown(f"**Score:** {row['score']:.4f}")
-        st.markdown(f"**Genres:** {row['genre']}")
-        st.markdown(highlight(row["summary"], query), unsafe_allow_html=True)
+        st.markdown(f"**Genres:** {row['Genre']}")
+        st.markdown(highlight(row["Summary"], query), unsafe_allow_html=True)
         st.markdown("---")
