@@ -41,12 +41,13 @@ lemmatizer = WordNetLemmatizer()
 
 def normalize_query(query):
     try:
-        tokens = nltk.word_tokenize(query.lower())
-    except LookupError:
-        nltk.download('punkt')
-        tokens = nltk.word_tokenize(query.lower())
-    lemmatized = [lemmatizer.lemmatize(t) for t in tokens if re.match(r'\w+', t)]
+        # Use a simpler tokenizer that doesn't rely on 'punkt_tab'
+        tokens = re.findall(r'\b\w+\b', query.lower())
+    except Exception:
+        tokens = query.lower().split()
+    lemmatized = [lemmatizer.lemmatize(t) for t in tokens]
     return ' '.join(lemmatized)
+
 
 def highlight(text, query):
     pattern = re.compile(r'(' + '|'.join(map(re.escape, query.split())) + r')', re.IGNORECASE)
