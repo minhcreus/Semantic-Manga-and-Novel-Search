@@ -5,87 +5,124 @@ import faiss
 import re
 from sentence_transformers import SentenceTransformer
 
-# Load data
+# Load data and embeddings
 df = pd.read_csv("meta_manga_novel_with_genre.csv")
 embeddings = np.load("novel_embeddings_genre.npy")
-faiss_index = faiss.read_index("novel_index_genre.faiss")
 
-# Verify column availability
-required_cols = {"title", "summary", "link", "genre"}
-if not required_cols.issubset(set(df.columns)):
-    st.error(f"Missing one of the required columns: {required_cols}")
-    st.stop()
+# Normalize column names for consistency
+df.columns = df.columns.str.lower()
 
-# Genre menu
-has_genre = "genre" in df.columns
-genres = sorted(set(g.strip() for g_list in df['genre'].dropna() for g in g_list.split(','))) if has_genre else []
-genres = ['All'] + genres
+# Extract filter options
+genres = sorted(set(g.strip() for glist in df['genre'].dropna() for g in glist.split(','))) if 'genre' in df.columns else []
+authors = ['All'] + sorted(df['author'].dropna().unique()) if 'author' in df.columns else ['All']
+languages = ['All'] + sorted(df['language'].dropna().unique()) if 'language' in df.columns else ['All']
+tags = sorted(set(t.strip() for tlist in df['tag'].dropna() for t in tlist.split(','))) if 'tag' in df.columns else []
+demographics = ['All'] + sorted(df['demographic'].dropna().unique()) if 'demographic' in df.columns else ['All']
+statuses = ['All'] + sorted(df['status'].dropna().unique()) if 'status' in df.columns else ['All']
 
-# Load model (no need for .to(device))
-model = SentenceTransformer("all-MiniLM-L6-v2")
+# Load model
+model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
-# Normalize query for consistent matching
-def normalize_query(query):
-    query = query.lower()
-    query = re.sub(r'[^\w\s]', '', query)
-    return query
-
-# Highlight terms
+# Highlight matched query terms
 def highlight(text, query):
     pattern = re.compile(r'(' + '|'.join(map(re.escape, query.split())) + r')', re.IGNORECASE)
     return pattern.sub(r'**\1**', text)
 
-# Search logic
-def semantic_search(query, df, embeddings, model, index, genre="All", top_k=5):
-    if genre != "All" and has_genre:
-        mask = df["genre"].fillna("").str.contains(genre, case=False)
-        sub_df = df[mask].reset_index(drop=True)
-        sub_embeddings = embeddings[mask.values]
-    else:
-        sub_df = df.copy()
-        sub_embeddings = embeddings
+# Normalize query
+def normalize_query(query):
+    return re.sub(r'[\s]+', ' ', query.strip().lower())
 
-    if "summary" not in sub_df.columns:
-        return pd.DataFrame()
+# Apply filters
+def apply_filters(df, selected):
+    mask = pd.Series([True] * len(df))
 
-    sub_df = sub_df[sub_df["summary"].notna()].reset_index(drop=True)
-    sub_embeddings = sub_embeddings[:len(sub_df)]
+    if selected['genres']:
+        mask &= df['genre'].apply(lambda x: all(g.lower() in x.lower() for g in selected['genres']) if pd.notna(x) else False)
+    if selected['include_tags']:
+        mask &= df['tag'].apply(lambda x: all(t.lower() in x.lower() for t in selected['include_tags']) if pd.notna(x) else False)
+    if selected['exclude_tags']:
+        mask &= df['tag'].apply(lambda x: all(t.lower() not in x.lower() for t in selected['exclude_tags']) if pd.notna(x) else True)
+    if selected['author'] != 'All':
+        mask &= df['author'] == selected['author']
+    if selected['language'] != 'All':
+        mask &= df['language'] == selected['language']
+    if selected['demographic'] != 'All':
+        mask &= df['demographic'] == selected['demographic']
+    if selected['status'] != 'All':
+        mask &= df['status'] == selected['status']
 
-    if sub_df.empty:
-        return pd.DataFrame()
+    return df[mask].reset_index(drop=True)
 
-    query_embedding = model.encode([query], convert_to_numpy=True).astype("float32")
+# Semantic search using filtered index
+def semantic_search(query, filtered_df, model, top_k, full_embeddings, base_df):
+    filtered_df = filtered_df[filtered_df['summary'].notna()].reset_index(drop=True)
+    index_map = base_df['title'].isin(filtered_df['title'])
+    embeddings = full_embeddings[index_map.values][:len(filtered_df)]
 
-    temp_index = faiss.IndexFlatL2(query_embedding.shape[1])
-    temp_index.add(sub_embeddings)
-    distances, indices = temp_index.search(query_embedding, top_k)
+    if len(filtered_df) == 0:
+        return filtered_df
 
-    results = sub_df.iloc[indices[0]].copy()
-    results["score"] = distances[0]
+    query_embed = model.encode([normalize_query(query)], convert_to_numpy=True).astype("float32")
+    index = faiss.IndexFlatL2(query_embed.shape[1])
+    index.add(embeddings)
+    distances, indices = index.search(query_embed, top_k)
+    results = filtered_df.iloc[indices[0]].copy()
+    results['score'] = distances[0]
     return results
 
 # Streamlit UI
-st.title("📚 Manga & Novel Semantic Search")
-query = st.text_input("Enter a query (e.g., action, fantasy, romance):")
+st.set_page_config(page_title="📚 MangaDex-style Novel Search", layout="wide")
+st.title("📖 Advanced Manga Novel Search")
 
-selected_genre = st.selectbox("Filter by Genre", genres)
-top_k = st.slider("Number of results", 1, 20, 5)
+query = st.text_input("Enter your query (e.g. reincarnation, demons, sect):")
+
+with st.sidebar:
+    st.header("🔍 Advanced Filters")
+    selected_genres = st.multiselect("Genres", genres)
+    selected_include_tags = st.multiselect("Include Tags", tags, key="include")
+    selected_exclude_tags = st.multiselect("Exclude Tags", tags, key="exclude")
+    selected_author = st.selectbox("Author", authors)
+    selected_language = st.selectbox("Language", languages)
+    selected_demo = st.selectbox("Demographic", demographics)
+    selected_status = st.selectbox("Status", statuses)
+    top_k = st.slider("Number of results", 1, 30, 10)
+    sort_by = st.selectbox("Sort by", ["Similarity", "Title", "Author"])
+
+filters = {
+    'genres': selected_genres,
+    'include_tags': selected_include_tags,
+    'exclude_tags': selected_exclude_tags,
+    'author': selected_author,
+    'language': selected_language,
+    'demographic': selected_demo,
+    'status': selected_status
+}
+
+filtered_df = apply_filters(df, filters)
 
 if query:
-    clean_query = normalize_query(query)
-    results = semantic_search(
-        clean_query, df, embeddings, model, faiss_index,
-        genre=selected_genre, top_k=top_k
-    )
+    results = semantic_search(query, filtered_df, model, top_k, embeddings, df)
 
-    if results.empty:
-        st.warning("No matching results found.")
+    if sort_by == "Title":
+        results = results.sort_values("title")
+    elif sort_by == "Author":
+        results = results.sort_values("author")
     else:
-        for _, row in results.iterrows():
-            st.markdown(f"### {row['title']}")
-            if pd.notna(row.get("link")):
-                st.markdown(f"[🔗 Read here]({row['link']})")
-            st.markdown(f"**Score:** {row['score']:.2f}")
-            st.markdown(f"**Genres:** {row['genre']}")
-            st.markdown(highlight(row["summary"], query), unsafe_allow_html=True)
-            st.markdown("---")
+        results = results.sort_values("score")
+
+    for i, row in results.iterrows():
+        st.markdown(f"### {row['title']}")
+        st.markdown(f"**Author:** {row.get('author', 'N/A')}  ")
+        st.markdown(f"**Genres:** {row.get('genre', 'N/A')}  ")
+        st.markdown(f"**Tags:** {row.get('tag', 'N/A')}  ")
+        st.markdown(f"**Language:** {row.get('language', 'N/A')}  ")
+        st.markdown(f"**Demographic:** {row.get('demographic', 'N/A')}  ")
+        st.markdown(f"**Status:** {row.get('status', 'N/A')}  ")
+        st.markdown(f"**Similarity Score:** {row['score']:.2f}")
+        st.markdown(highlight(row['summary'], query), unsafe_allow_html=True)
+        st.markdown("---")
+
+elif len(filtered_df) > 0:
+    st.info(f"Showing {len(filtered_df)} filtered novels. Enter a query to perform semantic search.")
+else:
+    st.warning("⚠️ No novels match the selected filters. Please adjust them.")
