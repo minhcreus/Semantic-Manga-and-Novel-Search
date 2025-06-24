@@ -17,7 +17,7 @@ all_genres = sorted({genre for sublist in df['genre'].dropna().map(split_genres)
 authors = ['All'] + sorted(df['author'].dropna().unique()) if 'author' in df.columns else ['All']
 languages = ['All'] + sorted(df['language'].dropna().unique()) if 'language' in df.columns else ['All']
 
-model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device='cpu')
+model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
 def normalize_query(query):
     query = query.lower()
