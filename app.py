@@ -3,7 +3,12 @@ import pandas as pd
 import numpy as np
 import faiss
 import re
+import nltk
 from sentence_transformers import SentenceTransformer
+from nltk.stem import WordNetLemmatizer
+
+nltk.download('punkt')
+nltk.download('wordnet')
 
 # Load data
 df = pd.read_csv("meta_manga_novel_with_genre.csv")
@@ -24,6 +29,12 @@ unique_genres = sorted(set(g.strip() for g_list in df['Genre'].dropna() for g in
 
 # Load model
 model = SentenceTransformer("all-MiniLM-L6-v2")
+lemmatizer = WordNetLemmatizer()
+
+def normalize_query(query):
+    tokens = nltk.word_tokenize(query.lower())
+    lemmatized = [lemmatizer.lemmatize(t) for t in tokens if re.match(r'\w+', t)]
+    return ' '.join(lemmatized)
 
 def highlight(text, query):
     pattern = re.compile(r'(' + '|'.join(map(re.escape, query.split())) + r')', re.IGNORECASE)
@@ -48,7 +59,8 @@ def semantic_search(query, df, embeddings, model, selected_genres=None, top_k=5)
     if sub_df.empty:
         return []
 
-    query_embedding = model.encode([query], normalize_embeddings=True)[0]
+    normalized_query = normalize_query(query)
+    query_embedding = model.encode([normalized_query], normalize_embeddings=True)[0]
     similarities = np.dot(sub_embeddings, query_embedding)
     top_indices = similarities.argsort()[::-1][:top_k]
 
