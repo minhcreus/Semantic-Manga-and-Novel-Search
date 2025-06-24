@@ -6,8 +6,8 @@ import re
 from sentence_transformers import SentenceTransformer, util
 
 # Load data
-df = pd.read_csv("wuxia_novel_details_dupli_dropped.csv")
-embeddings = np.load("novel_embeddings.npy")
+df = pd.read_csv("meta_manga_novel_with_genre.csv")
+embeddings = np.load("manga_novel_embeddings.npy")
 
 # Ensure alignment between df and embeddings
 if len(df) != len(embeddings):
@@ -38,17 +38,16 @@ def semantic_search(query, df, embeddings, model, selected_genres=None, top_k=5)
         sub_df = df.copy()
         sub_embeddings = embeddings[:len(sub_df)]
 
-    sub_df = sub_df[sub_df["Summary"].notna()].reset_index(drop=True)
+    sub_df = sub_df[sub_df["summary"].notna()].reset_index(drop=True)
     sub_embeddings = sub_embeddings[:len(sub_df)]
 
     if sub_df.empty:
         return []
 
-    query_embedding = model.encode([query], convert_to_tensor=True)
-    doc_embeddings = util.tensor_to_numpy(util.normalize_embeddings(model.encode(sub_df['Summary'].tolist(), convert_to_tensor=True)))
-    query_embedding_np = util.tensor_to_numpy(util.normalize_embeddings(query_embedding))[0]
+    query_embedding = model.encode([query], convert_to_tensor=True, normalize_embeddings=True)
+    doc_embeddings_tensor = model.encode(sub_df['summary'].tolist(), convert_to_tensor=True, normalize_embeddings=True)
 
-    similarities = np.dot(doc_embeddings, query_embedding_np)
+    similarities = util.cos_sim(query_embedding, doc_embeddings_tensor)[0].cpu().numpy()
     top_indices = similarities.argsort()[::-1][:top_k]
 
     results = sub_df.iloc[top_indices].copy()
@@ -65,10 +64,10 @@ top_k = st.slider("Number of results", min_value=1, max_value=20, value=5)
 if query:
     results = semantic_search(query, df, embeddings, model, selected_genres=selected_genres, top_k=top_k)
     for i, row in results.iterrows():
-        st.markdown(f"### {row['Title']}")
-        if pd.notna(row.get("Link")):
-            st.markdown(f"[Read here]({row['Link']})")
+        st.markdown(f"### {row['title']}")
+        if pd.notna(row.get("link")):
+            st.markdown(f"[Read here]({row['link']})")
         st.markdown(f"**Score:** {row['score']:.4f}")
-        st.markdown(f"**Genres:** {row['Genre']}")
-        st.markdown(highlight(row["Summary"], query), unsafe_allow_html=True)
+        st.markdown(f"**Genres:** {row['genre']}")
+        st.markdown(highlight(row["summary"], query), unsafe_allow_html=True)
         st.markdown("---")
