@@ -21,23 +21,18 @@ def setup_nltk():
 
 setup_nltk()
 
-# Load data
 df = pd.read_csv("meta_manga_novel_with_genre.csv")
 embeddings = np.load("manga_novel_embeddings.npy")
 
-# Ensure alignment between df and embeddings
 if len(df) != len(embeddings):
     df = df.iloc[:len(embeddings)].copy()
     embeddings = embeddings[:len(df)]
 
-# Standardize column names
 df.columns = [col.strip().capitalize() for col in df.columns]
 
-# Genre menu setup
 has_genre = "Genre" in df.columns
 unique_genres = sorted(set(g.strip() for g_list in df['Genre'].dropna() for g in str(g_list).split(','))) if has_genre else []
 
-# Load model
 model = SentenceTransformer("all-MiniLM-L6-v2")
 lemmatizer = WordNetLemmatizer()
 tokenizer = TreebankWordTokenizer()
@@ -80,7 +75,6 @@ def semantic_search(query, df, embeddings, model, selected_genres=None, top_k=5)
     results["score"] = similarities[top_indices]
     return results
 
-# Streamlit UI
 st.title("Wuxia Novel Semantic Search")
 query = st.text_input("Enter a query (e.g., apocalypse, reincarnation, cultivation):")
 
