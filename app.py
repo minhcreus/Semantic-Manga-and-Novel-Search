@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import faiss
 import re
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, util
 
 # Load data and embeddings
 df = pd.read_csv("meta_manga_novel_with_genre.csv")
@@ -53,21 +53,22 @@ def apply_filters(df, selected):
 
     return df[mask].reset_index(drop=True)
 
-# Semantic search using filtered index
+# Semantic search using cosine similarity with SentenceTransformer
 def semantic_search(query, filtered_df, model, top_k, full_embeddings, base_df):
     filtered_df = filtered_df[filtered_df['summary'].notna()].reset_index(drop=True)
     index_map = base_df['title'].isin(filtered_df['title'])
-    embeddings = full_embeddings[index_map.values][:len(filtered_df)]
+    subset_embeddings = full_embeddings[index_map.values][:len(filtered_df)]
 
     if len(filtered_df) == 0:
         return filtered_df
 
-    query_embed = model.encode([normalize_query(query)], convert_to_numpy=True).astype("float32")
-    index = faiss.IndexFlatL2(query_embed.shape[1])
-    index.add(embeddings)
-    distances, indices = index.search(query_embed, top_k)
-    results = filtered_df.iloc[indices[0]].copy()
-    results['score'] = distances[0]
+    query_embed = model.encode([normalize_query(query)], convert_to_tensor=True)
+    subset_embeddings_tensor = util.tensor_to_numpy(util.normalize_embeddings(model.smart_batching_collate([normalize_query(x) for x in filtered_df['summary']], model)[0]))
+    scores = util.cos_sim(query_embed, subset_embeddings_tensor)[0].cpu().numpy()
+
+    top_indices = np.argsort(scores)[::-1][:top_k]
+    results = filtered_df.iloc[top_indices].copy()
+    results['score'] = scores[top_indices]
     return results
 
 # Streamlit UI
@@ -108,10 +109,12 @@ if query:
     elif sort_by == "Author":
         results = results.sort_values("author")
     else:
-        results = results.sort_values("score")
+        results = results.sort_values("score", ascending=False)
 
     for i, row in results.iterrows():
         st.markdown(f"### {row['title']}")
+        if pd.notna(row.get("link")):
+            st.markdown(f"[🔗 Read here]({row['link']})")
         st.markdown(f"**Author:** {row.get('author', 'N/A')}  ")
         st.markdown(f"**Genres:** {row.get('genre', 'N/A')}  ")
         st.markdown(f"**Tags:** {row.get('tag', 'N/A')}  ")
