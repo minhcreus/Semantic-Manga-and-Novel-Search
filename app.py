@@ -63,7 +63,7 @@ def semantic_search(query, filtered_df, model, top_k, full_embeddings, base_df):
     if len(filtered_df) == 0:
         return filtered_df
 
-    query_embed = model.encode([normalize_query(query)], convert_to_tensor=True)
+    query_embed = model.encode([normalize_query(query)], convert_to_tensor=True, device=torch.device('cpu'))
     subset_embeddings_tensor = torch.tensor(subset_embeddings)
     scores = util.cos_sim(query_embed, subset_embeddings_tensor)[0].cpu().numpy()
 
