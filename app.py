@@ -5,7 +5,20 @@ import faiss
 import re
 import nltk
 from sentence_transformers import SentenceTransformer
+import nltk
 from nltk.stem import WordNetLemmatizer
+from nltk import data as nltk_data
+
+try:
+    nltk_data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+
+try:
+    nltk_data.find('corpora/wordnet')
+except LookupError:
+    nltk.download('wordnet')
+
 
 nltk.download('punkt')
 nltk.download('wordnet')
