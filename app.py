@@ -31,6 +31,9 @@ def highlight(text, query):
     return pattern.sub(r'**\1**', text)
 
 def normalize_query(query, title_list):
+    if not isinstance(query, str):
+        return query
+    title_list = [str(t) for t in title_list if isinstance(t, str)]
     close_match = get_close_matches(query, title_list, n=1, cutoff=0.85)
     return close_match[0] if close_match else query
 
@@ -75,8 +78,8 @@ selected_genre = st.selectbox("Filter by Genre", genres)
 top_k = st.slider("Number of results", min_value=1, max_value=20, value=5)
 
 if query:
-    st.caption("🔍 Query Processing")
-    st.caption("🎯 Filter with genre: " + selected_genre)
+    st.caption("🔍 Xử lí query: Kiểm tra chính tả, khớp với tên title nếu gần đúng, và enrich với BERT")
+    st.caption("🎯 Filter theo thể loại: " + selected_genre)
     results = semantic_search(query, df, embeddings, model, genre=selected_genre, top_k=top_k)
     for i, row in results.iterrows():
         st.markdown(f"### {row['title']}")
