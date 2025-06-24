@@ -3,16 +3,18 @@ import pandas as pd
 import numpy as np
 import faiss
 import re
-from sentence_transformers import SentenceTransformer
+import torch
+from sentence_transformers import SentenceTransformer, util
 
 # Load new data
 df = pd.read_csv("meta_manga_novel_with_genre.csv")
 embeddings = np.load("manga_novel_embeddings.npy")
-index = faiss.read_index("manga_novel_index.faiss")
+
+# Normalize column headers
+df.columns = df.columns.str.strip().str.lower()
+has_genre = "genre" in df.columns
 
 # Genre menu setup
-has_genre = "genre" in df.columns.str.lower()
-df.columns = df.columns.str.strip().str.lower()  # Normalize column headers
 genres = ['All'] + sorted(set(g.strip() for g_list in df['genre'].dropna() for g in g_list.split(','))) if has_genre else ['All']
 
 # Load model
@@ -22,27 +24,28 @@ def highlight(text, query):
     pattern = re.compile(r'(' + '|'.join(map(re.escape, query.split())) + r')', re.IGNORECASE)
     return pattern.sub(r'**\1**', text)
 
-def semantic_search(query, df, embeddings, model, index, genre="All", top_k=5):
+def semantic_search(query, df, embeddings, model, genre="All", top_k=5):
     if genre != "All" and has_genre:
         mask = df["genre"].fillna("").str.contains(genre, case=False)
         sub_df = df[mask].reset_index(drop=True)
-        sub_indices = np.where(mask.values)[0]
+        sub_embeddings = embeddings[mask.values]
     else:
         sub_df = df.copy()
-        sub_indices = np.arange(len(df))
+        sub_embeddings = embeddings
 
     sub_df = sub_df[sub_df["summary"].notna()].reset_index(drop=True)
-    sub_indices = sub_indices[:len(sub_df)]
+    sub_embeddings = sub_embeddings[:len(sub_df)]
 
     if sub_df.empty:
         return []
 
-    query_embedding = model.encode([query], convert_to_numpy=True).astype("float32")
-    distances, indices_found = index.search(query_embedding, top_k)
+    query_embedding = model.encode(query, convert_to_tensor=True)
+    corpus_embeddings = torch.tensor(sub_embeddings)
+    scores = util.cos_sim(query_embedding, corpus_embeddings)[0].cpu().numpy()
 
-    result_indices = sub_indices[indices_found[0]]
-    results = df.iloc[result_indices].copy()
-    results["score"] = distances[0]
+    top_indices = np.argsort(scores)[::-1][:top_k]
+    results = sub_df.iloc[top_indices].copy()
+    results["score"] = scores[top_indices]
     return results
 
 st.title("Manga/Novel Semantic Search")
@@ -52,7 +55,7 @@ selected_genre = st.selectbox("Filter by Genre", genres)
 top_k = st.slider("Number of results", min_value=1, max_value=20, value=5)
 
 if query:
-    results = semantic_search(query, df, embeddings, model, index, genre=selected_genre, top_k=top_k)
+    results = semantic_search(query, df, embeddings, model, genre=selected_genre, top_k=top_k)
     for i, row in results.iterrows():
         st.markdown(f"### {row['title']}")
         if pd.notna(row.get("link")):
