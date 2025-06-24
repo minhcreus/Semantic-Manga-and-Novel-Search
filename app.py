@@ -29,8 +29,7 @@ if len(df) != len(embeddings):
     embeddings = embeddings[:len(df)]
 
 # Standardize column names
-if 'Genre' not in df.columns:
-    df.columns = [col.strip().capitalize() for col in df.columns]
+df.columns = [col.strip().capitalize() for col in df.columns]
 
 # Genre menu setup
 has_genre = "Genre" in df.columns
@@ -41,7 +40,11 @@ model = SentenceTransformer("all-MiniLM-L6-v2")
 lemmatizer = WordNetLemmatizer()
 
 def normalize_query(query):
-    tokens = nltk.word_tokenize(query.lower())
+    try:
+        tokens = nltk.word_tokenize(query.lower())
+    except LookupError:
+        nltk.download('punkt')
+        tokens = nltk.word_tokenize(query.lower())
     lemmatized = [lemmatizer.lemmatize(t) for t in tokens if re.match(r'\w+', t)]
     return ' '.join(lemmatized)
 
