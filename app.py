@@ -12,6 +12,7 @@ embeddings = np.load("novel_embeddings.npy")
 # Ensure alignment between df and embeddings
 if len(df) != len(embeddings):
     df = df.iloc[:len(embeddings)].copy()
+    embeddings = embeddings[:len(df)]
 
 # Genre menu setup
 has_genre = "Genre" in df.columns
@@ -28,7 +29,11 @@ def semantic_search(query, df, embeddings, model, selected_genres=None, top_k=5)
     if selected_genres and has_genre and 'All' not in selected_genres:
         genre_mask = df['Genre'].apply(lambda g: any(tag in g for tag in selected_genres) if pd.notna(g) else False)
         sub_df = df[genre_mask].reset_index(drop=True)
-        sub_embeddings = embeddings[genre_mask.values][:len(sub_df)]
+        sub_embeddings = embeddings[genre_mask.values]
+        if len(sub_embeddings) != len(sub_df):
+            min_len = min(len(sub_embeddings), len(sub_df))
+            sub_df = sub_df.iloc[:min_len].copy()
+            sub_embeddings = sub_embeddings[:min_len]
     else:
         sub_df = df.copy()
         sub_embeddings = embeddings[:len(sub_df)]
