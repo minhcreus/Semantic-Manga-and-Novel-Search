@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import faiss
 import re
+import torch
 from sentence_transformers import SentenceTransformer, util
 
 # Load data and embeddings
@@ -63,7 +64,7 @@ def semantic_search(query, filtered_df, model, top_k, full_embeddings, base_df):
         return filtered_df
 
     query_embed = model.encode([normalize_query(query)], convert_to_tensor=True)
-    subset_embeddings_tensor = util.tensor_to_numpy(util.normalize_embeddings(model.smart_batching_collate([normalize_query(x) for x in filtered_df['summary']], model)[0]))
+    subset_embeddings_tensor = torch.tensor(subset_embeddings)
     scores = util.cos_sim(query_embed, subset_embeddings_tensor)[0].cpu().numpy()
 
     top_indices = np.argsort(scores)[::-1][:top_k]
