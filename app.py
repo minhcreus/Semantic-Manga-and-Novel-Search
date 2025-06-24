@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import faiss
 import re
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import SentenceTransformer
 
 # Load data
 df = pd.read_csv("meta_manga_novel_with_genre.csv")
@@ -44,10 +44,8 @@ def semantic_search(query, df, embeddings, model, selected_genres=None, top_k=5)
     if sub_df.empty:
         return []
 
-    query_embedding = model.encode([query], convert_to_tensor=True, normalize_embeddings=True)
-    doc_embeddings_tensor = model.encode(sub_df['summary'].tolist(), convert_to_tensor=True, normalize_embeddings=True)
-
-    similarities = util.cos_sim(query_embedding, doc_embeddings_tensor)[0].cpu().numpy()
+    query_embedding = model.encode([query], normalize_embeddings=True)[0]
+    similarities = np.dot(sub_embeddings, query_embedding)
     top_indices = similarities.argsort()[::-1][:top_k]
 
     results = sub_df.iloc[top_indices].copy()
