@@ -6,9 +6,8 @@ import re
 import nltk
 from sentence_transformers import SentenceTransformer
 from nltk.stem import WordNetLemmatizer
-from nltk.tokenize import word_tokenize
+from nltk.tokenize import TreebankWordTokenizer
 
-# Safe downloading of punkt and wordnet
 @st.cache_resource
 def setup_nltk():
     try:
@@ -41,11 +40,13 @@ unique_genres = sorted(set(g.strip() for g_list in df['Genre'].dropna() for g in
 # Load model
 model = SentenceTransformer("all-MiniLM-L6-v2")
 lemmatizer = WordNetLemmatizer()
+tokenizer = TreebankWordTokenizer()
 
 def normalize_query(query):
-    tokens = word_tokenize(query.lower())
+    tokens = tokenizer.tokenize(query.lower())
     lemmatized = [lemmatizer.lemmatize(t) for t in tokens if re.match(r'\w+', t)]
     return ' '.join(lemmatized)
+
 
 def highlight(text, query):
     pattern = re.compile(r'(' + '|'.join(map(re.escape, query.split())) + r')', re.IGNORECASE)
