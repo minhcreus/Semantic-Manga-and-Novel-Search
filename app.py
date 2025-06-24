@@ -6,13 +6,19 @@ import re
 import nltk
 from sentence_transformers import SentenceTransformer
 from nltk.stem import WordNetLemmatizer
-from nltk import data as nltk_data
+from nltk.tokenize import word_tokenize
 
 # Safe downloading of punkt and wordnet
 @st.cache_resource
 def setup_nltk():
-    nltk.download('punkt', quiet=True)
-    nltk.download('wordnet', quiet=True)
+    try:
+        nltk.data.find("tokenizers/punkt")
+    except LookupError:
+        nltk.download("punkt")
+    try:
+        nltk.data.find("corpora/wordnet")
+    except LookupError:
+        nltk.download("wordnet")
 
 setup_nltk()
 
@@ -37,7 +43,7 @@ model = SentenceTransformer("all-MiniLM-L6-v2")
 lemmatizer = WordNetLemmatizer()
 
 def normalize_query(query):
-    tokens = nltk.word_tokenize(query.lower())
+    tokens = word_tokenize(query.lower())
     lemmatized = [lemmatizer.lemmatize(t) for t in tokens if re.match(r'\w+', t)]
     return ' '.join(lemmatized)
 
