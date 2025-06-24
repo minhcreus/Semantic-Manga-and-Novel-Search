@@ -5,6 +5,12 @@ import faiss
 import re
 import torch
 from sentence_transformers import SentenceTransformer, util
+from difflib import get_close_matches
+from transformers import BertTokenizer, BertModel
+
+# Load BERT for auxiliary query enhancement
+tokenizer_bert = BertTokenizer.from_pretrained("bert-base-uncased")
+model_bert = BertModel.from_pretrained("bert-base-uncased")
 
 # Load new data
 df = pd.read_csv("meta_manga_novel_with_genre.csv")
@@ -17,12 +23,23 @@ has_genre = "genre" in df.columns
 # Genre menu setup
 genres = ['All'] + sorted(set(g.strip() for g_list in df['genre'].dropna() for g in g_list.split(','))) if has_genre else ['All']
 
-# Load model
+# Load SentenceTransformer model
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
 def highlight(text, query):
     pattern = re.compile(r'(' + '|'.join(map(re.escape, query.split())) + r')', re.IGNORECASE)
     return pattern.sub(r'**\1**', text)
+
+def normalize_query(query, title_list):
+    close_match = get_close_matches(query, title_list, n=1, cutoff=0.85)
+    return close_match[0] if close_match else query
+
+def enrich_query_with_bert(raw_query):
+    inputs = tokenizer_bert(raw_query, return_tensors="pt")
+    outputs = model_bert(**inputs)
+    last_hidden_states = outputs.last_hidden_state
+    keywords = tokenizer_bert.convert_ids_to_tokens(inputs["input_ids"][0])
+    return " ".join([kw for kw in keywords if kw.isalpha() and len(kw) > 2])
 
 def semantic_search(query, df, embeddings, model, genre="All", top_k=5):
     if genre != "All" and has_genre:
@@ -39,7 +56,10 @@ def semantic_search(query, df, embeddings, model, genre="All", top_k=5):
     if sub_df.empty:
         return []
 
-    query_embedding = model.encode(query, convert_to_tensor=True)
+    corrected_query = normalize_query(query, sub_df["title"].tolist())
+    enriched_query = enrich_query_with_bert(corrected_query)
+
+    query_embedding = model.encode(enriched_query, convert_to_tensor=True)
     corpus_embeddings = torch.tensor(sub_embeddings)
     scores = util.cos_sim(query_embedding, corpus_embeddings)[0].cpu().numpy()
 
@@ -55,6 +75,8 @@ selected_genre = st.selectbox("Filter by Genre", genres)
 top_k = st.slider("Number of results", min_value=1, max_value=20, value=5)
 
 if query:
+    st.caption("🔍 Query Processing")
+    st.caption("🎯 Filter with genre: " + selected_genre)
     results = semantic_search(query, df, embeddings, model, genre=selected_genre, top_k=top_k)
     for i, row in results.iterrows():
         st.markdown(f"### {row['title']}")
