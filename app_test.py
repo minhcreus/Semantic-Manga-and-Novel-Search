@@ -8,10 +8,6 @@ from sentence_transformers import SentenceTransformer
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import TreebankWordTokenizer
 
-# --- Setup and NLP Tools ---
-
-# REVISED SECTION: Combine NLTK setup and tool instantiation into one cached function.
-# This guarantees data is downloaded BEFORE the lemmatizer is created, fixing the error.
 @st.cache_resource
 def get_nlp_tools():
     """Downloads NLTK data and returns initialized lemmatizer and tokenizer."""
@@ -28,12 +24,10 @@ def get_nlp_tools():
     tokenizer = TreebankWordTokenizer()
     return lemmatizer, tokenizer
 
-# Load model (run once and cache)
 @st.cache_resource
 def load_model():
     return SentenceTransformer("all-MiniLM-L6-v2")
 
-# --- Data Loading ---
 @st.cache_data
 def load_data():
     """Loads the cleaned data and embeddings from disk."""
@@ -46,25 +40,17 @@ def load_data():
         st.error("Please run the `create_embeddings.py` script first to generate these files.")
         return None, None
 
-# --- Main App Execution ---
-
-# Load all necessary resources
 model = load_model()
 lemmatizer, tokenizer = get_nlp_tools()
 df, embeddings = load_data()
 
-# Stop the app if data loading failed
 if df is None:
     st.stop()
 
-# For display purposes, capitalize column names
 df.columns = [col.strip().capitalize() for col in df.columns]
 
-# --- Pre-computation for Filtering ---
 has_genre = "Genre" in df.columns
 unique_genres = sorted(set(g.strip() for g_list in df['Genre'].dropna() for g in str(g_list).split(','))) if has_genre else []
-
-# --- Text Processing and Search Functions ---
 
 def normalize_query(query):
     """Lemmatizes and lowercases the user query."""
@@ -106,8 +92,7 @@ def semantic_search(query, df, embeddings, model, selected_genres=None, top_k=5)
     query_embedding = model.encode([normalized_query], normalize_embeddings=True).astype('float32')
     
     distances, indices = index.search(query_embedding, top_k)
-    
-    # Check if any results were found
+
     if len(indices[0]) == 0 or indices[0][0] == -1:
         return pd.DataFrame()
 
@@ -116,10 +101,8 @@ def semantic_search(query, df, embeddings, model, selected_genres=None, top_k=5)
     
     return results_df
 
-# --- Streamlit UI ---
-
 st.set_page_config(layout="wide")
-st.title("📚 Novel & Manga Semantic Search Engine")
+st.title("Novel & Manga Semantic Search Engine")
 
 query = st.text_input("Enter a query (e.g., apocalypse, reincarnation, cultivation):", placeholder="Search for a story about a hero returning to the past...")
 
