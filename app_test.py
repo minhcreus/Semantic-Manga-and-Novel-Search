@@ -32,7 +32,7 @@ def load_model():
 def load_data():
     """Loads the cleaned data and embeddings from disk."""
     try:
-        df = pd.read_csv("cleaned_manga_data.csv")
+        df = pd.read_csv("meta_manga_novel_with_genre_standardlized.csv")
         embeddings = np.load("manga_novel_embeddings.npy")
         return df, embeddings
     except FileNotFoundError:
