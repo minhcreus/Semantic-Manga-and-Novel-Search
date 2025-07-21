@@ -79,7 +79,7 @@ def load_data():
 
 # --- Main App ---
 st.set_page_config(layout="wide", page_title="Semantic Search Engine")
-st.title("📚 Novel & Manga Semantic Search Engine")
+st.title("Novel & Manga Semantic Search Engine")
 
 # Load resources
 model = load_model()
