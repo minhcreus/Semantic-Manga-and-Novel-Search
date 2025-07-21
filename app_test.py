@@ -84,6 +84,14 @@ def semantic_search(query, df, embeddings, model, selected_genres=None, top_k=5)
     if sub_df.empty or len(sub_embeddings) == 0:
         return pd.DataFrame()
 
+     if type_filter:
+            if isinstance(type_filter, list):
+                if type_text.lower() not in [t.lower() for t in type_filter]:
+                    continue
+            else:
+                if type_text.lower() != type_filter.lower():
+                    continue
+
     d = sub_embeddings.shape[1]
     index = faiss.IndexFlatIP(d)
     index.add(sub_embeddings.astype('float32'))
