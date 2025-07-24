@@ -10,7 +10,8 @@ from nltk.tokenize import TreebankWordTokenizer
 import os
 from datetime import datetime
 import logging
-import time # Import the time module
+import time
+import json # Import the json module
 
 # --- Setup Logging for Feedback ---
 LOG_DIR = "logs"
@@ -74,8 +75,33 @@ def load_data():
         return df, embeddings
     except FileNotFoundError:
         st.error("Error: `meta_manga_novel_with_genre_standardlized.csv` or `manga_novel_embeddings.npy` not found.")
-        st.error("Please ensure the necessary files are in the same directory.")
+        st.error("Please ensure the necessary data files are in the same directory.")
         return None, None
+
+@st.cache_data
+def load_ground_truth():
+    """Loads the ground truth data from a JSON file."""
+    try:
+        with open("Ground_truth.json", 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        st.sidebar.error("`Ground_truth.json` not found. Please add it to the directory.")
+        return None
+
+def evaluate_results(retrieved_titles, relevant_titles):
+    """Calculates Precision, Recall, and F1-Score."""
+    retrieved_set = set(retrieved_titles)
+    relevant_set = set(relevant_titles)
+    
+    if not relevant_set: return 0, 0, 0 # Cannot evaluate without relevant titles
+    
+    true_positives = len(retrieved_set.intersection(relevant_set))
+    
+    precision = true_positives / len(retrieved_set) if retrieved_set else 0
+    recall = true_positives / len(relevant_set)
+    f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+    
+    return precision, recall, f1_score
 
 # --- Main App ---
 st.set_page_config(layout="wide", page_title="Semantic Search Engine")
@@ -85,6 +111,7 @@ st.title("Novel & Manga Semantic Search Engine")
 model = load_model()
 lemmatizer, tokenizer = get_nlp_tools()
 df, embeddings = load_data()
+ground_truth = load_ground_truth()
 
 if df is None:
     st.stop()
@@ -104,17 +131,14 @@ def normalize_query(query):
 
 def highlight(text, query):
     """Highlights query terms in the result text."""
-    if not isinstance(text, str):
-        return ""
+    if not isinstance(text, str): return ""
     query_words = set(query.lower().split())
     pattern = re.compile(r'\b(' + '|'.join(map(re.escape, query_words)) + r')\b', re.IGNORECASE)
     return pattern.sub(r'**\1**', text)
 
 @st.cache_data(show_spinner=False)
 def semantic_search(_model, query, df, embeddings, selected_genres=None, type_filter=None, top_k=30):
-    """
-    Performs semantic search using FAISS. This is cached to prevent re-computation.
-    """
+    """Performs semantic search using FAISS."""
     filtered_df = df.copy()
     if has_type and type_filter and 'All' not in type_filter:
         filtered_df = filtered_df[filtered_df['Type'].isin(type_filter)]
@@ -144,30 +168,48 @@ def semantic_search(_model, query, df, embeddings, selected_genres=None, type_fi
     results_df['Score'] = distances[0]
     return results_df
 
-# --- Streamlit UI ---
+# --- Sidebar ---
+st.sidebar.header("Filters")
+selected_types = st.sidebar.multiselect("Filter by Type:", options=['All'] + unique_types, default=['All']) if has_type and unique_types else []
+selected_genres = st.sidebar.multiselect("Filter by Genre:", options=['All'] + unique_genres, default=['All']) if has_genre and unique_genres else []
+
+st.sidebar.header("Evaluation")
+if ground_truth:
+    eval_query = st.sidebar.selectbox("Select a query to evaluate:", list(ground_truth.keys()))
+    top_k_eval = st.sidebar.slider("Top-K for Evaluation", min_value=1, max_value=30, value=10)
+
+    if st.sidebar.button("Evaluate Search Results"):
+        relevant_titles = ground_truth.get(eval_query, [])
+        retrieved_results = semantic_search(model, eval_query, df, embeddings, top_k=top_k_eval)
+        
+        if not retrieved_results.empty and relevant_titles:
+            retrieved_titles = retrieved_results['Title'].tolist()
+            precision, recall, f1_score = evaluate_results(retrieved_titles, relevant_titles)
+            
+            st.sidebar.markdown(f"**Results for '{eval_query}' (Top {top_k_eval})**")
+            st.sidebar.markdown(f"**Precision:** `{precision:.3f}`")
+            st.sidebar.markdown(f"**Recall:** `{recall:.3f}`")
+            st.sidebar.markdown(f"**F1-Score:** `{f1_score:.3f}`")
+        else:
+            st.sidebar.warning("Could not perform evaluation. No results or no ground truth titles.")
+else:
+    st.sidebar.info("Evaluation module disabled. `Ground_truth.json` not found.")
+
+
+# --- Main Search UI ---
 query = st.text_input(
     "Enter a query (e.g., apocalypse, reincarnation, cultivation):",
     placeholder="Search for a story about a hero returning to the past..."
 )
 
-# Sidebar for filters
-st.sidebar.header("Filters")
-selected_types = st.sidebar.multiselect("Filter by Type:", options=['All'] + unique_types, default=['All']) if has_type and unique_types else []
-selected_genres = st.sidebar.multiselect("Filter by Genre:", options=['All'] + unique_genres, default=['All']) if has_genre and unique_genres else []
-# The top_k slider is now removed.
-
-# --- Search and Display Results ---
 if query:
-    # Reset page number to 0 if a new query is entered
     if 'current_query' not in st.session_state or st.session_state.current_query != query:
         st.session_state.current_query = query
         st.session_state.current_page = 0
         logger.info(f"New search: '{query}'")
 
-    # Time the search function
     start_time = time.time()
     with st.spinner("Searching..."):
-        # Fetch up to 30 results to allow for pagination
         results = semantic_search(model, query, df, embeddings, selected_genres, selected_types, top_k=30)
     end_time = time.time()
     search_duration = end_time - start_time
@@ -177,7 +219,6 @@ if query:
     else:
         st.markdown(f"Found **{len(results)}** results. _Search took: **{search_duration:.2f}** seconds._")
         
-        # --- Pagination Logic ---
         results_per_page = 10
         if 'current_page' not in st.session_state:
             st.session_state.current_page = 0
@@ -186,7 +227,6 @@ if query:
         end_idx = start_idx + results_per_page
         paginated_results = results.iloc[start_idx:end_idx]
 
-        # Display the results for the current page
         for i, row in paginated_results.iterrows():
             st.markdown("---")
             result_title = row.get('Title', 'No Title')
@@ -201,7 +241,6 @@ if query:
             summary_text = row.get("Summary", "No summary available.")
             st.markdown(highlight(summary_text, query), unsafe_allow_html=True)
 
-            # --- Feedback Section ---
             feedback_key = f"feedback_{i}_{query}"
             if st.session_state.get(feedback_key, False):
                 st.success("Thanks for your feedback! 👍")
@@ -216,24 +255,19 @@ if query:
                     st.session_state[feedback_key] = True
                     st.rerun()
 
-        # --- Pagination Controls ---
         st.markdown("---")
         total_pages = (len(results) + results_per_page - 1) // results_per_page
         if total_pages > 1:
             page_cols = st.columns([1, 1, 10, 1, 1])
             
-            # Previous Button
             if page_cols[0].button("⬅️ Previous", disabled=(st.session_state.current_page == 0)):
                 st.session_state.current_page -= 1
                 st.rerun()
 
-            # Page Indicator
             page_cols[1].markdown(f"Page **{st.session_state.current_page + 1}** of **{total_pages}**")
 
-            # Next Button
             if page_cols[4].button("Next ➡️", disabled=(st.session_state.current_page >= total_pages - 1)):
                 st.session_state.current_page += 1
                 st.rerun()
-
 else:
     st.info("Enter a query to search for novels and manga.")
